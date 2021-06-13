@@ -1,0 +1,105 @@
+When copying to the local file system I tend to use rsync with the following options:
+
+# rsync -avhW --no-compress --progress /src/ /dst/
+Here's my reasoning:
+
+-a is for archive, which preserves ownership, permissions etc.
+-v is for verbose, so I can see what's happening (optional)
+-h is for human-readable, so the transfer rate and file sizes are easier to read (optional)
+-W is for copying whole files only, without delta-xfer algorithm which should reduce CPU load
+--no-compress as there's no lack of bandwidth between local devices
+--progress so I can see the progress of large files (optional)
+I've seen 17% faster transfers using the above rsync settings over the following tar command as suggested by another answer:
+
+# (cd /src; tar cf - .) | (cd /dst; tar xpf -)
+
+
+For use in BTRFS systems automate Balacne and scrubs
+#!/bin/bash
+/usr/local/emhttp/plugins/dynamix/scripts/notify -e "scrub_array" -s "Balance Download Drive" -d "Balance of Download drive started" -i "normal"
+btrfs balance start -musage=50 -dusage=50 /mnt/cache > /var/log/scrub_array.log
+if [ $? -eq 0 ]
+then
+  /usr/local/emhttp/plugins/dynamix/scripts/notify -e "scrub_array" -s "Balance Download Drive" -d "Balance of Download drive finished" -i "normal"
+else
+  /usr/local/emhttp/plugins/dynamix/scripts/notify -e "scrub_array" -s "Balance Download Drive" -d "Error in Balance of Download drive!" -i "alert"
+fi
+
+Nvidia Stream patch
+#!/bin/bash
+wget https://raw.githubusercontent.com/keylase/nvidia-patch/master/patch.sh
+chmod +x ./patch.sh
+./patch.sh
+
+Defrag for unriad
+#!/bin/bash
+# #####################################
+# Script:      XFS Extended Defragmentation v0.2
+# Description: Defragmentate only HDDs (SSDs will be ignored) if requirements met for a selectable running time.
+# Author:      Marc Gutt
+# 
+# Changelog:
+# 0.2
+# - SSD recognition added
+# 0.1
+# - first release
+# 
+# ######### Settings ##################
+defrag_seconds=7200
+defrag_only_sleep=0
+notification=1
+# #####################################
+# 
+# ######### Script ####################
+# make script race condition safe
+if [[ -d "/tmp/${0///}" ]] || ! mkdir "/tmp/${0///}"; then exit 1; fi; trap 'rmdir "/tmp/${0///}"' EXIT;
+
+# defrag only if parity is not spinning
+if [[ $defrag_only_sleep == "1" ]]; then
+    # obtain parity disk's device id
+    parity_id=$(mdcmd status | grep rdevName.0 | cut -d = -f 2)
+    echo "Parity has device id $parity_id"
+    # we defrag only if parity is not spinning
+    parity_state=$(smartctl -n standby "/dev/$parity_id")
+    if [[ $parity_state != *"STANDBY"* ]]; then
+        echo "Defragmentation has been skipped because of active parity disk"
+        exit
+    fi
+fi
+
+echo "Search for HDDs..."
+
+# parse /etc/mtab and check rotational status
+declare -a mtab
+while IFS= read -r -d '' line; do
+    disk_id_regex="^/dev/md([0-9]+)"
+    if [[ "$line" =~ $disk_id_regex ]]; then
+        disk_id=${BASH_REMATCH[1]}
+        rotational=$(cat /sys/block/md${disk_id}/queue/rotational)
+        if [[ "$rotational" == "1" ]]; then
+            mtab+=("$line")
+            echo "Found HDD with id md${disk_id} (added)"
+            continue
+        fi
+        echo "Found SSD with id md${disk_id} (skipped)"
+    fi
+done < <(cat /etc/mtab | grep -E '^/dev/md' | tr '\n' '\0')
+
+if [ ${#mtab[@]} -eq 0 ]; then
+    /usr/local/emhttp/webGui/scripts/notify -i alert -s "XFS Defragmentation failed!" -d "No HDD found!"
+    exit
+fi
+
+printf "%s\n" "${mtab[@]}" > /tmp/.xfs_mtab
+echo "Content of /tmp/.xfs_mtab:"
+cat /tmp/.xfs_mtab
+
+# defrag
+xfs_fsr -v -m /tmp/.xfs_mtab -t "$defrag_seconds" -f /tmp/.xfs_fsrlast
+
+Enable wsdd on unraid
+#!/bin/bash
+#!/bin/bash
+wget https://raw.githubusercontent.com/christgau/wsdd/master/src/wsdd.py
+chmod +x ./wsdd.py
+./wsdd.py
