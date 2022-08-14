@@ -32,8 +32,10 @@ TEMPDIR=$(mktemp -d)
 	LAST_COMMIT=$(git show --no-notes --format=format:"%H" origin/$BRANCH | head -n 1)
 
 if [ $LAST_COMMIT != $LAST_UPDATE ]; then
+	#Run Update & Git Pull
 	echo "Running Update"
 	git pull > /dev/null 2>&1
+	
 	# Copy the .txt files and .json file to the temp directory
 	cp `find $GITSYNCDIR -name "*.txt" -o -name cache_domains.json` $TEMPDIR
 
