@@ -55,11 +55,13 @@ if [ $LAST_COMMIT != $LAST_UPDATE ]; then
 
 	# Restart pihole-FTL
 	sudo service pihole-FTL restart
-	ssh root@192.168.0.27 'docker restart pihole-template'
 
 	# Delete the temp directory to clean up files
 	trap "exit 1"           HUP INT PIPE QUIT TERM
 	trap 'rm -rf "$TEMPDIR"' EXIT
+	
+	# Restart pihole-FTL-unraid
+	ssh root@192.168.0.27 'docker restart pihole-template'
 else
 	echo "Nothing to do!"
 fi
