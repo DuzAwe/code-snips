@@ -2,8 +2,8 @@ Taken from https://oct8l.gitlab.io/posts/2021/297/scripting-lancache-dns-updates
 
 Automates the process for PiHoles to use lancache + code for redundent unraid 
 Requires SSH keys set up from local to unriad.
-Requires git to be installed.
-Only runs when there is changes thanks to porcelain.
+Requires git to be installed, cant be a Gem or NPM.
+Only runs when there is changes thanks to remote update check.
 
 #!/bin/bash
 
@@ -14,6 +14,7 @@ SYSTEMUSER=dietpi
 GITSYNCDIR=/home/$SYSTEMUSER/cache-domains
 # Your personalized config file from "Setting up our config.json file" step
 DNSMASQCONFIG=/home/$SYSTEMUSER/config.json
+BRANCH=master
 
 # Create a new, random temp directory and make sure it was created, else exit
 TEMPDIR=$(mktemp -d)
@@ -24,39 +25,41 @@ TEMPDIR=$(mktemp -d)
   fi
 
 # Switch to the git directory and pull any new data
-        cd $GITSYNCDIR && \
-        git pull > /dev/null 2>&1
+	cd $GITSYNCDIR && \
+  	git remote update > /dev/null 2>&1
 
-if [[ `git status --porcelain` ]]; then
+	LAST_UPDATE=$(git show --no-notes --format=format:"%H" $BRANCH | head -n 1)
+	LAST_COMMIT=$(git show --no-notes --format=format:"%H" origin/$BRANCH | head -n 1)
 
-        # Copy the .txt files and .json file to the temp directory
-        cp `find $GITSYNCDIR -name "*.txt" -o -name cache_domains.json` $TEMPDIR
+if [ $LAST_COMMIT != $LAST_UPDATE ]; then
+	echo "Running Update"
+	git pull > /dev/null 2>&1
+	# Copy the .txt files and .json file to the temp directory
+	cp `find $GITSYNCDIR -name "*.txt" -o -name cache_domains.json` $TEMPDIR
 
-        # Copy the create-dnsmasq.sh script to our temp directory
-        mkdir $TEMPDIR/scripts/ && \
-        cp $GITSYNCDIR/scripts/create-dnsmasq.sh $TEMPDIR/scripts/ && \
-        chmod +x $TEMPDIR/scripts/create-dnsmasq.sh
+	# Copy the create-dnsmasq.sh script to our temp directory
+	mkdir $TEMPDIR/scripts/ && \
+  	cp $GITSYNCDIR/scripts/create-dnsmasq.sh $TEMPDIR/scripts/ && \
+  	chmod +x $TEMPDIR/scripts/create-dnsmasq.sh
 
-        # Copy the config over
-        cp $DNSMASQCONFIG $TEMPDIR/scripts/
+	# Copy the config over
+	cp $DNSMASQCONFIG $TEMPDIR/scripts/
 
-        # Generate the dnsmasq files with the script
-        cd $TEMPDIR/scripts/ && \
-        bash ./create-dnsmasq.sh > /dev/null 2>&1
+	# Generate the dnsmasq files with the script
+	cd $TEMPDIR/scripts/ && \
+  	bash ./create-dnsmasq.sh > /dev/null 2>&1
 
-        # Copy the dnsmasq files
-        cp -r $TEMPDIR/scripts/output/dnsmasq/*.conf /etc/dnsmasq.d/
-        rsync --exclude $TEMPDIR/scripts/output/dnsmasq/*.conf root@192.168.0.27:/mnt/user/appdata/pihole/dnsmasq.d/
+	# Copy the dnsmasq files
+	cp -r $TEMPDIR/scripts/output/dnsmasq/*.conf /etc/dnsmasq.d/
+	rsync --exclude $TEMPDIR/scripts/output/dnsmasq/*.conf root@192.168.0.27:/mnt/user/appdata/pihole/dnsmasq.d/
 
-        # Restart pihole-FTL
-        sudo service pihole-FTL restart
-        ssh root@192.168.0.* 'docker restart pihole-template'
+	# Restart pihole-FTL
+	sudo service pihole-FTL restart
+	ssh root@192.168.0.27 'docker restart pihole-template'
 
-        # Delete the temp directory to clean up files
-        trap "exit 1"           HUP INT PIPE QUIT TERM
-        trap 'rm -rf "$TEMPDIR"' EXIT
+	# Delete the temp directory to clean up files
+	trap "exit 1"           HUP INT PIPE QUIT TERM
+	trap 'rm -rf "$TEMPDIR"' EXIT
 else
-        ssh root@192.168.0.* 'docker restart pihole-template'
-
-        echo "Nothing to do!"
+	echo "Nothing to do!"
 fi
