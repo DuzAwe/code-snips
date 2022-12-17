@@ -103,3 +103,6 @@ Enable wsdd on unraid
 wget https://raw.githubusercontent.com/christgau/wsdd/master/src/wsdd.py
 chmod +x ./wsdd.py
 ./wsdd.py
+
+Pull update for all local docker images
+docker images | awk '(NR>1) && ($2!~/none/) {print $1":"$2}' | xargs -L1 docker pull
